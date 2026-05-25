@@ -2,21 +2,20 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 
-// ─── Word Lists ───────────────────────────────────────────────────────────────
 const WORDS = {
   5: ["CRANE","SLATE","TRACE","PHONE","BLAZE","FROST","GLOOM","NIGHT","SWORD","STORM",
       "FLAME","DREAD","RAVEN","HAUNT","CRYPT","SHADE","CURSE","MAGIC","PIXEL","VAPOR",
       "STEEL","PRISM","LUNAR","SABLE","GLARE","EMBER","FLINT","CLOAK","BROOD","STARK",
-      "CRISP","DWELL","FABLE","GRAIL","Haven","IRONY","KNEEL","LATCH","MOURN","NOVEL",
-      "OAKEN","PROWL","QUIRK","RESIN","SMELT","TAUNT","UNTIE","VIGIL","WALTZ","YIELD"],
+      "CRISP","DWELL","FABLE","GRAIL","IRONY","KNEEL","LATCH","MOURN","NOVEL",
+      "OAKEN","PROWL","QUIRK","RESIN","SMELT","TAUNT","VIGIL","WALTZ","YIELD"],
   6: ["SHADOW","FALCON","MYSTIC","FROZEN","CASTLE","PORTAL","MIRROR","PLAGUE","ROTTEN",
       "WITHER","INFECT","THRONE","GOBLIN","KNIGHT","DAGGER","PRIEST","VORTEX","COBALT",
-      "MORTAL","FAMINE","BANISH","COMPEL","DEVOUR","ENTITY","FATHOM","GLYPH","HARROW",
+      "MORTAL","FAMINE","BANISH","COMPEL","DEVOUR","ENTITY","FATHOM","HARROW",
       "IGNITE","JESTER","KINDLE","LAMENT","NOMADS","OCCULT","PILLAR","RAVAGE","SIGNET"],
   7: ["PHANTOM","CRYSTAL","ECLIPSE","GRAVITY","LANTERN","SILENCE","CRIMSON","ANCIENT",
       "BLESSED","CONQUER","DESTINY","ELEMENT","FRACTAL","HORIZON","INFERNO","JOURNEY",
-      "KINGDOM","LABYRINTH","MASTERY","OBSCURE","PILGRIM","QUALIFY","RADIANT","SERPENT",
-      "TRIUMPH","UNRAVEL","VILLAIN","WARRIOR","EVASION","FACTION"],
+      "KINGDOM","MASTERY","OBSCURE","PILGRIM","RADIANT","SERPENT","TRIUMPH","UNRAVEL",
+      "VILLAIN","WARRIOR","EVASION","FACTION"],
 };
 
 const KB_ROWS = [
@@ -24,6 +23,8 @@ const KB_ROWS = [
   ["A","S","D","F","G","H","J","K","L"],
   ["ENTER","Z","X","C","V","B","N","M","⌫"],
 ];
+
+const PRIORITY = { correct: 3, present: 2, absent: 1 };
 
 function pick(len) {
   const list = WORDS[len];
@@ -45,7 +46,6 @@ function scoreGuess(guess, target) {
   return result;
 }
 
-// ─── Confetti ─────────────────────────────────────────────────────────────────
 function launchConfetti() {
   const canvas = document.getElementById("confetti-canvas");
   if (!canvas) return;
@@ -56,23 +56,17 @@ function launchConfetti() {
   const pieces = Array.from({ length: 140 }, () => ({
     x: Math.random() * canvas.width,
     y: Math.random() * canvas.height - canvas.height,
-    w: 8 + Math.random() * 6,
-    h: 4 + Math.random() * 4,
-    r: Math.random() * Math.PI * 2,
-    dr: (Math.random() - 0.5) * 0.2,
-    dy: 3 + Math.random() * 4,
-    dx: (Math.random() - 0.5) * 2,
+    w: 8 + Math.random() * 6, h: 4 + Math.random() * 4,
+    r: Math.random() * Math.PI * 2, dr: (Math.random() - 0.5) * 0.2,
+    dy: 3 + Math.random() * 4, dx: (Math.random() - 0.5) * 2,
     color: colors[Math.floor(Math.random() * colors.length)],
   }));
   let frame = 0;
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     pieces.forEach((p) => {
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.r);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+      ctx.fillStyle = p.color; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
       ctx.restore();
       p.x += p.dx; p.y += p.dy; p.r += p.dr;
     });
@@ -83,213 +77,232 @@ function launchConfetti() {
   draw();
 }
 
-// ─── Tile ─────────────────────────────────────────────────────────────────────
-function Tile({ letter, state, animState }) {
-  const base = "flex items-center justify-center text-xl font-semibold uppercase select-none rounded transition-colors duration-300 border";
-  const size = "w-[52px] h-[52px]";
-
+// Each committed row flips in with a CSS delay per tile
+function CommittedRow({ word, result, wordLen }) {
   const stateClass = {
     correct: "bg-emerald-800 border-emerald-700 text-white",
     present: "bg-amber-700 border-amber-600 text-white",
     absent:  "bg-zinc-800 border-zinc-700 text-zinc-500",
-    filled:  "border-zinc-500 bg-zinc-900 text-white",
-    empty:   "border-zinc-700 bg-zinc-900 text-white",
-  }[state] ?? "border-zinc-700 bg-zinc-900 text-white";
-
-  const animClass = animState === "shake" ? "animate-shake" : animState === "pop" ? "animate-pop" : "";
-
+  };
   return (
-    <div className={`${base} ${size} ${stateClass} ${animClass}`}>
-      {letter}
+    <div className="flex gap-1.5">
+      {Array.from({ length: wordLen }).map((_, c) => (
+        <div
+          key={c}
+          className={`w-[52px] h-[52px] flex items-center justify-center text-xl font-semibold uppercase rounded border ${stateClass[result[c]]}`}
+          style={{
+            animation: `tileFlip 0.5s ease forwards`,
+            animationDelay: `${c * 150}ms`,
+            // start face-down so flip reveals color
+          }}
+        >
+          {word[c]}
+        </div>
+      ))}
     </div>
   );
 }
 
-// ─── Key ──────────────────────────────────────────────────────────────────────
+function ActiveRow({ letters, wordLen, shake }) {
+  return (
+    <div className={`flex gap-1.5 ${shake ? "animate-shake" : ""}`}>
+      {Array.from({ length: wordLen }).map((_, c) => {
+        const letter = letters[c] || "";
+        return (
+          <div
+            key={c}
+            className={`w-[52px] h-[52px] flex items-center justify-center text-xl font-semibold uppercase rounded border
+              ${letter ? "border-zinc-500 bg-zinc-900 text-white animate-pop" : "border-zinc-700 bg-zinc-900 text-white"}`}
+          >
+            {letter}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function EmptyRow({ wordLen }) {
+  return (
+    <div className="flex gap-1.5">
+      {Array.from({ length: wordLen }).map((_, c) => (
+        <div key={c} className="w-[52px] h-[52px] rounded border border-zinc-700 bg-zinc-900" />
+      ))}
+    </div>
+  );
+}
+
 function Key({ label, state, onClick }) {
   const isWide = label === "ENTER" || label === "⌫";
-  const base = "flex items-center justify-center rounded font-semibold uppercase cursor-pointer select-none transition-colors duration-200 text-sm h-[44px]";
-  const width = isWide ? "min-w-[52px] px-2 text-xs" : "w-[32px]";
   const stateClass = {
     correct: "bg-emerald-800 text-white",
     present: "bg-amber-700 text-white",
     absent:  "bg-zinc-900 text-zinc-600",
   }[state] ?? "bg-zinc-700 text-zinc-200 hover:bg-zinc-600";
-
   return (
-    <button className={`${base} ${width} ${stateClass}`} onClick={() => onClick(label)}>
+    <button
+      className={`flex items-center justify-center rounded font-semibold uppercase cursor-pointer select-none transition-colors duration-200 h-[44px] ${isWide ? "min-w-[52px] px-2 text-xs" : "w-[32px] text-sm"} ${stateClass}`}
+      onClick={() => onClick(label)}
+    >
       {label}
     </button>
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+function makeState(len) {
+  return {
+    target: pick(len),
+    guesses: [],      // committed words: string[]
+    results: [],      // committed results: string[][]
+    draft: [],        // current row letters: string[]
+    gameOver: false,
+    won: false,
+    keyMap: {},
+  };
+}
+
 export default function WordlePage() {
   const [wordLen, setWordLen] = useState(5);
-  const [target, setTarget] = useState(() => pick(5));
-  const [board, setBoard] = useState(() => Array.from({ length: 6 }, () => Array(5).fill("")));
-  const [results, setResults] = useState(() => Array(6).fill(null));
-  const [currentRow, setCurrentRow] = useState(0);
-  const [currentCol, setCurrentCol] = useState(0);
-  const [gameOver, setGameOver] = useState(false);
+  const [gs, setGs] = useState(() => makeState(5));
+  const [shaking, setShaking] = useState(false);
   const [message, setMessage] = useState("");
-  const [keyMap, setKeyMap] = useState({});
-  const [shakeRow, setShakeRow] = useState(null);
-  const [revealingRow, setRevealingRow] = useState(null);
-  const [tileFlips, setTileFlips] = useState({}); // { "r-c": state }
-
-  const gameOverRef = useRef(false);
-  const currentRowRef = useRef(0);
-  const currentColRef = useRef(0);
-  const boardRef = useRef(board);
-  const targetRef = useRef(target);
-
-  gameOverRef.current = gameOver;
-  currentRowRef.current = currentRow;
-  currentColRef.current = currentCol;
-  boardRef.current = board;
-  targetRef.current = target;
+  const isRevealingRef = useRef(false);
 
   const showMsg = useCallback((msg, duration = 2000) => {
     setMessage(msg);
     if (duration > 0) setTimeout(() => setMessage(""), duration);
   }, []);
 
-  const startGame = useCallback((len) => {
-    const newTarget = pick(len);
-    setTarget(newTarget);
-    targetRef.current = newTarget;
-    setBoard(Array.from({ length: 6 }, () => Array(len).fill("")));
-    setResults(Array(6).fill(null));
-    setCurrentRow(0);
-    setCurrentCol(0);
-    setGameOver(false);
-    gameOverRef.current = false;
-    setKeyMap({});
-    setMessage("");
-    setShakeRow(null);
-    setRevealingRow(null);
-    setTileFlips({});
+  const handleKey = useCallback((key) => {
+    if (isRevealingRef.current) return;
+
+    setGs(prev => {
+      if (prev.gameOver) return prev;
+      const len = prev.target.length;
+
+      if (key === "⌫" || key === "BACKSPACE") {
+        return { ...prev, draft: prev.draft.slice(0, -1) };
+      }
+
+      if (/^[A-Z]$/.test(key)) {
+        if (prev.draft.length >= len) return prev;
+        return { ...prev, draft: [...prev.draft, key] };
+      }
+
+      if (key === "ENTER") {
+        if (prev.draft.length < len) {
+          // shake handled outside
+          return prev;
+        }
+        const word = prev.draft.join("");
+        const result = scoreGuess(word, prev.target);
+        const newKeyMap = { ...prev.keyMap };
+        result.forEach((state, i) => {
+          const k = word[i];
+          if (!newKeyMap[k] || PRIORITY[state] > PRIORITY[newKeyMap[k]]) newKeyMap[k] = state;
+        });
+        const newGuesses = [...prev.guesses, word];
+        const newResults = [...prev.results, result];
+        const won = result.every(r => r === "correct");
+        const gameOver = won || newGuesses.length === 6;
+        return { ...prev, guesses: newGuesses, results: newResults, draft: [], keyMap: newKeyMap, gameOver, won };
+      }
+
+      return prev;
+    });
   }, []);
 
-  const handleKey = useCallback((key) => {
-    if (gameOverRef.current) return;
-    const row = currentRowRef.current;
-    const col = currentColRef.current;
-    const len = boardRef.current[0].length;
-
-    if (key === "⌫" || key === "BACKSPACE") {
-      if (col > 0) {
-        setBoard(prev => {
-          const next = prev.map(r => [...r]);
-          next[row][col - 1] = "";
-          return next;
-        });
-        setCurrentCol(c => c - 1);
-      }
-      return;
-    }
-
-    if (key === "ENTER") {
-      const guess = boardRef.current[row].join("");
-      if (guess.length < len) {
-        setShakeRow(row);
-        setTimeout(() => setShakeRow(null), 400);
-        showMsg("Not enough letters");
-        return;
-      }
-
-      const result = scoreGuess(guess, targetRef.current);
-
-      // Reveal tiles one by one
-      setRevealingRow(row);
-      result.forEach((state, c) => {
-        setTimeout(() => {
-          setTileFlips(prev => ({ ...prev, [`${row}-${c}`]: state }));
-        }, c * 150 + 250);
-      });
-
+  // Watch for new committed rows to trigger reveal delay + win/lose message
+  const prevGuessLen = useRef(0);
+  useEffect(() => {
+    if (gs.guesses.length > prevGuessLen.current) {
+      prevGuessLen.current = gs.guesses.length;
+      const len = gs.target.length;
+      const revealDuration = len * 150 + 600;
+      isRevealingRef.current = true;
       setTimeout(() => {
-        setResults(prev => { const next = [...prev]; next[row] = result; return next; });
-        setRevealingRow(null);
-
-        // Update key map
-        const priority = { correct: 3, present: 2, absent: 1 };
-        setKeyMap(prev => {
-          const next = { ...prev };
-          result.forEach((state, i) => {
-            const k = guess[i];
-            if (!next[k] || priority[state] > priority[next[k]]) next[k] = state;
-          });
-          return next;
-        });
-
-        if (result.every(r => r === "correct")) {
-          setGameOver(true);
-          gameOverRef.current = true;
+        isRevealingRef.current = false;
+        if (gs.won) {
           showMsg("Brilliant! 🎉", 3000);
-          setTimeout(launchConfetti, 200);
-          return;
+          launchConfetti();
+        } else if (gs.gameOver) {
+          showMsg(`The word was: ${gs.target}`, 5000);
         }
-
-        const nextRow = row + 1;
-        setCurrentRow(nextRow);
-        setCurrentCol(0);
-
-        if (nextRow === 6) {
-          setGameOver(true);
-          gameOverRef.current = true;
-          showMsg(`The word was: ${targetRef.current}`, 5000);
-        }
-      }, len * 150 + 400);
-      return;
+      }, revealDuration);
     }
+  }, [gs.guesses.length, gs.won, gs.gameOver, gs.target, showMsg]);
 
-    if (/^[A-Z]$/.test(key) && col < len) {
-      setBoard(prev => {
-        const next = prev.map(r => [...r]);
-        next[row][col] = key;
-        return next;
-      });
-      setCurrentCol(c => c + 1);
-    }
-  }, [showMsg]);
-
-  // Physical keyboard
+  // Keyboard input
   useEffect(() => {
     const handler = (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.toUpperCase();
-      if (k === "ENTER" || k === "BACKSPACE" || /^[A-Z]$/.test(k)) handleKey(k);
+      if (k === "ENTER") {
+        if (gs.draft.length < gs.target.length && !gs.gameOver) {
+          setShaking(true);
+          showMsg("Not enough letters");
+          setTimeout(() => setShaking(false), 400);
+          return;
+        }
+        handleKey("ENTER");
+      } else if (k === "BACKSPACE" || /^[A-Z]$/.test(k)) {
+        handleKey(k);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleKey]);
+  }, [handleKey, gs.draft.length, gs.target.length, gs.gameOver, showMsg]);
+
+  const onScreenKey = useCallback((label) => {
+    if (label === "ENTER" && gs.draft.length < gs.target.length && !gs.gameOver) {
+      setShaking(true);
+      showMsg("Not enough letters");
+      setTimeout(() => setShaking(false), 400);
+      return;
+    }
+    handleKey(label);
+  }, [handleKey, gs.draft, gs.target, gs.gameOver, showMsg]);
 
   const switchLength = (len) => {
     setWordLen(len);
-    startGame(len);
+    setGs(makeState(len));
+    prevGuessLen.current = 0;
+    setMessage("");
+    isRevealingRef.current = false;
   };
 
-  const getTileState = (r, c) => {
-    const letter = board[r][c];
-    const flipState = tileFlips[`${r}-${c}`];
-    if (flipState) return flipState;
-    if (results[r]) return results[r][c];
-    if (!letter) return "empty";
-    return "filled";
-  };
+  const { guesses, results, draft, gameOver, keyMap, target } = gs;
+  const totalRows = 6;
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center py-8 px-4 font-mono">
+      <style>{`
+        @keyframes tileFlip {
+          0%   { transform: rotateX(0deg); }
+          49%  { transform: rotateX(90deg); }
+          50%  { transform: rotateX(90deg); }
+          100% { transform: rotateX(0deg); }
+        }
+        @keyframes shake {
+          0%,100% { transform: translateX(0); }
+          20%,60% { transform: translateX(-6px); }
+          40%,80% { transform: translateX(6px); }
+        }
+        @keyframes pop {
+          0%   { transform: scale(1); }
+          50%  { transform: scale(1.1); }
+          100% { transform: scale(1); }
+        }
+        .animate-shake { animation: shake 0.4s ease; }
+        .animate-pop   { animation: pop 0.1s ease; }
+      `}</style>
+
       <canvas id="confetti-canvas" className="fixed inset-0 w-full h-full pointer-events-none z-50" />
 
-      {/* Header */}
       <div className="w-full max-w-sm border-b border-zinc-800 pb-4 mb-4 text-center">
         <h1 className="text-2xl font-semibold tracking-[0.2em] text-white uppercase">Wordle</h1>
       </div>
 
-      {/* Length picker */}
       <div className="flex gap-2 mb-5">
         {[5, 6, 7].map(len => (
           <button
@@ -306,41 +319,31 @@ export default function WordlePage() {
         ))}
       </div>
 
-      {/* Message */}
-      <div className="h-7 mb-3 text-sm text-zinc-400 tracking-wide text-center">
-        {message}
-      </div>
+      <div className="h-7 mb-3 text-sm text-zinc-400 tracking-wide text-center">{message}</div>
 
-      {/* Board */}
       <div className="flex flex-col gap-1.5 mb-6">
-        {board.map((row, r) => (
-          <div key={r} className={`flex gap-1.5 ${shakeRow === r ? "animate-shake" : ""}`}>
-            {row.map((letter, c) => (
-              <Tile
-                key={c}
-                letter={letter}
-                state={getTileState(r, c)}
-              />
-            ))}
-          </div>
-        ))}
+        {Array.from({ length: totalRows }).map((_, r) => {
+          if (r < guesses.length) {
+            return <CommittedRow key={r} word={guesses[r].split("")} result={results[r]} wordLen={wordLen} />;
+          }
+          if (r === guesses.length && !gameOver) {
+            return <ActiveRow key={r} letters={draft} wordLen={wordLen} shake={shaking} />;
+          }
+          return <EmptyRow key={r} wordLen={wordLen} />;
+        })}
       </div>
 
-      {/* Keyboard */}
       <div className="flex flex-col gap-1.5 items-center">
         {KB_ROWS.map((keys, i) => (
           <div key={i} className="flex gap-1">
-            {keys.map(k => (
-              <Key key={k} label={k} state={keyMap[k]} onClick={handleKey} />
-            ))}
+            {keys.map(k => <Key key={k} label={k} state={keyMap[k]} onClick={onScreenKey} />)}
           </div>
         ))}
       </div>
 
-      {/* New game */}
       {gameOver && (
         <button
-          onClick={() => startGame(wordLen)}
+          onClick={() => { setGs(makeState(wordLen)); prevGuessLen.current = 0; setMessage(""); isRevealingRef.current = false; }}
           className="mt-6 px-6 py-2.5 bg-white text-black rounded font-semibold text-sm hover:bg-zinc-200 transition-colors tracking-wide"
         >
           New Game
