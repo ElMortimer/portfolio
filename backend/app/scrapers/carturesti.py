@@ -12,7 +12,8 @@ class CarturestiScraper(BookStoreScraper):
         url = f"https://carturesti.ro/product/search/{quote(query)}"
         
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7"
         }
 
         try:
@@ -22,16 +23,19 @@ class CarturestiScraper(BookStoreScraper):
                     return offers
                 
                 soup = BeautifulSoup(response.text, 'html.parser')
-                cards = soup.select('prod-list-box, prod-grid-box, .md-card')
+                
+                cards = soup.select('div.card, div[class*="prod"], article, li.product, .md-card')
+                if not cards:
+                    cards = soup.find_all(lambda tag: tag.name in ['div', 'article'] and tag.find('h5') and tag.find('a'))
 
                 for card in cards:
-                    title_el = card.select_one('h5.md-title, .title')
-                    author_el = card.select_one('div.subtitlu-produs a, .author')
-                    price_el = card.select_one('span.suma')
-                    link_el = card.select_one('a.select-item-event, a')
+                    title_el = card.select_one('h5, h4, h3, .title, a[title]')
+                    author_el = card.select_one('a[href*="/autor/"], .author, .subtitlu-produs')
+                    price_el = card.select_one('.suma, .price, span[content]')
+                    link_el = card.select_one('a[href*="/carte/"], a.select-item-event, a')
 
                     title = title_el.get_text(strip=True) if title_el else None
-                    if not title:
+                    if not title or len(title) < 2:
                         continue
 
                     author = author_el.get_text(strip=True) if author_el else None
@@ -39,7 +43,9 @@ class CarturestiScraper(BookStoreScraper):
                     price = None
                     if price_el:
                         try:
-                            price = float(price_el.get('content', 0) or price_el.get_text(strip=True).replace(',', '.'))
+                            raw = price_el.get('content') or price_el.get_text(strip=True)
+                            raw_clean = ''.join(c for c in raw if c.isdigit() or c == '.')
+                            price = float(raw_clean) if raw_clean else None
                         except:
                             pass
 
@@ -62,5 +68,12 @@ class CarturestiScraper(BookStoreScraper):
         except Exception as e:
             print(f"[Cărturești Error]: {e}")
 
-        offers.sort(key=lambda o: (o.price is None, o.price))
-        return offers
+        seen = set()
+        unique_offers = []
+        for o in offers:
+            if o.url not in seen:
+                seen.add(o.url)
+                unique_offers.append(o)
+
+        unique_offers.sort(key=lambda o: (o.price is None, o.price))
+        return unique_offers
