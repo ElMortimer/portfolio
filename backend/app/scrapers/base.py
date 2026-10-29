@@ -1,16 +1,19 @@
 from abc import ABC, abstractmethod
-from playwright.async_api import Browser
 from app.models import BookOffer
 
 class BookStoreScraper(ABC):
-    name: str
-
-    @staticmethod
-    def _is_relevant(title: str, author: str | None, query: str) -> bool:
-        text_to_search = f"{title} {author or ''}".lower()
-        query_words = query.lower().split()
-        return all(word in text_to_search for word in query_words)
+    name: str = "base"
 
     @abstractmethod
-    async def search(self, query: str, browser: Browser) -> list[BookOffer]:
+    async def search(self, query: str, browser=None) -> list[BookOffer]:
         pass
+
+    def _is_relevant(self, title: str, author: str | None, query: str) -> bool:
+        if not title:
+            return False
+        
+        q_words = query.lower().split()
+        t_lower = title.lower()
+        a_lower = author.lower() if author else ""
+        
+        return any(word in t_lower or word in a_lower for word in q_words)
