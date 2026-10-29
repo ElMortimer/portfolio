@@ -1,81 +1,66 @@
 from urllib.parse import quote
-from playwright.async_api import Browser
-
+import httpx
+from bs4 import BeautifulSoup
 from app.models import BookOffer
 from app.scrapers.base import BookStoreScraper
-
-EXTRACT_JS = """
-() => {
-  const cards = document.querySelectorAll('prod-list-box, prod-grid-box');
-
-  return Array.from(cards).map(card => {
-    const titleEl = card.querySelector('h5.md-title');
-    const authorEl = card.querySelector('div.subtitlu-produs a[href*="/autor/"]');
-    const priceEl = card.querySelector('span.suma');
-    const stockEl = card.querySelector('.productStock');
-    const linkEl = card.querySelector('a.select-item-event');
-
-    let stockStatus = 'unknown';
-    if (stockEl) {
-      const cls = [...stockEl.classList];
-      stockStatus = cls.find(c => ['in-stoc', 'limitat', 'indisponibil'].includes(c)) || 'unknown';
-    }
-
-    return {
-      title: titleEl?.innerText.trim() || null,
-      author: authorEl?.innerText.trim() || null,
-      price: priceEl ? parseFloat(priceEl.getAttribute('content')) : null,
-      stock_status: stockStatus,
-      url: linkEl?.href || null
-    };
-  });
-}
-"""
 
 class CarturestiScraper(BookStoreScraper):
     name = "carturesti"
 
-    async def search(self, query: str, browser: Browser) -> list[BookOffer]:
+    async def search(self, query: str, browser=None) -> list[BookOffer]:
         offers: list[BookOffer] = []
+        url = f"https://carturesti.ro/product/search/{quote(query)}"
         
-        page = await browser.new_page(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        )
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
 
         try:
-            url = f"https://carturesti.ro/product/search/{quote(query)}"
-            await page.goto(url, wait_until="domcontentloaded")
-            
-            print(f"[Cărturești] Titlu pagină: {await page.title()}")
-
-            try:
-                await page.wait_for_selector("h5.md-title", timeout=30000)
-            except Exception as e:
-                print(f"[Cărturești] Timeout sau nu s-au găsit cărți: {e}")
-                return offers
+            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+                response = await client.get(url, headers=headers)
+                if response.status_code != 200:
+                    return offers
                 
-            raw_items = await page.evaluate(EXTRACT_JS)
-            
-        finally:
-            await page.close()
+                soup = BeautifulSoup(response.text, 'html.parser')
+                cards = soup.select('prod-list-box, prod-grid-box, .md-card')
 
-        for item in raw_items:
-            if not item.get("title"):
-                continue
-            if not self._is_relevant(item["title"], item.get("author"), query):
-                continue
-            if item.get("url") and "/carte/" not in item["url"]:
-                continue
+                for card in cards:
+                    title_el = card.select_one('h5.md-title, .title')
+                    author_el = card.select_one('div.subtitlu-produs a, .author')
+                    price_el = card.select_one('span.suma')
+                    link_el = card.select_one('a.select-item-event, a')
 
-            offers.append(BookOffer(
-                store=self.name,
-                title=item["title"],
-                author=item.get("author"),
-                price=item.get("price"),
-                currency="RON",
-                available=item.get("stock_status") in ("in-stoc", "limitat"),
-                url=item.get("url"),
-            ))
+                    title = title_el.get_text(strip=True) if title_el else None
+                    if not title:
+                        continue
+
+                    author = author_el.get_text(strip=True) if author_el else None
+                    
+                    price = None
+                    if price_el:
+                        try:
+                            price = float(price_el.get('content', 0) or price_el.get_text(strip=True).replace(',', '.'))
+                        except:
+                            pass
+
+                    url_prod = link_el.get('href') if link_el else None
+                    if url_prod and not url_prod.startswith('http'):
+                        url_prod = f"https://carturesti.ro{url_prod}"
+
+                    if not self._is_relevant(title, author, query):
+                        continue
+
+                    offers.append(BookOffer(
+                        store=self.name,
+                        title=title,
+                        author=author,
+                        price=price,
+                        currency="RON",
+                        available=True,
+                        url=url_prod,
+                    ))
+        except Exception as e:
+            print(f"[Cărturești Error]: {e}")
 
         offers.sort(key=lambda o: (o.price is None, o.price))
         return offers
