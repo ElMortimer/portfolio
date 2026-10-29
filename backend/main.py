@@ -29,6 +29,10 @@ async def root():
 
 @app.get("/api/search")
 async def search_books(request: Request, q: str = Query(..., min_length=2)):
-    browser = request.app.state.browser
-    results = await search_all_stores(q, browser)
-    return {"query": q, "count": len(results), "results": results}
+    try:
+        browser = request.app.state.browser
+        results = await search_all_stores(q, browser)
+        return {"query": q, "count": len(results), "results": results}
+    except Exception as e:
+        print(f"[EROARE CRITICĂ LA CĂUTARE]: {e}")
+        return {"query": q, "count": 0, "results": []}
