@@ -86,10 +86,11 @@ EXTRACT_SINGLE_PRODUCT_JS = """
 }
 """
 
+
 class ElefantScraper(BookStoreScraper):
     name = "elefant"
 
-async def search(self, query: str, browser: Browser) -> list[BookOffer]:
+    async def search(self, query: str, browser: Browser) -> list[BookOffer]:
         offers: list[BookOffer] = []
 
         page = await browser.new_page(
@@ -100,7 +101,7 @@ async def search(self, query: str, browser: Browser) -> list[BookOffer]:
             url = f"https://www.elefant.ro/search?SearchTerm={quote(query)}"
             await page.goto(url, wait_until="domcontentloaded")
             
-            print(f"[Elefant] Titlu pagină văzut de bot: {await page.title()}")
+            print(f"[Elefant] Titlu pagină: {await page.title()}")
 
             is_single_product = "/search" not in page.url
 
@@ -112,7 +113,9 @@ async def search(self, query: str, browser: Browser) -> list[BookOffer]:
                 raw_items = await page.evaluate(EXTRACT_SINGLE_PRODUCT_JS)
             else:
                 try:
-                    await page.wait_for_selector("div.product-tile", state="attached", timeout=30000)
+                    await page.wait_for_selector(
+                        "div.product-tile", state="attached", timeout=30000
+                    )
                 except Exception as e:
                     print(f"[Elefant] Timeout listă: {e}")
                 raw_items = await page.evaluate(EXTRACT_LIST_JS)
