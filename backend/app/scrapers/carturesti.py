@@ -13,58 +13,46 @@ class CarturestiScraper(BookStoreScraper):
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
             "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7"
         }
 
         try:
             async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
                 response = await client.get(url, headers=headers)
+                print(f"[Cărturești] Status HTTP: {response.status_code}, Lungime HTML: {len(response.text)}")
+                
                 if response.status_code != 200:
                     return offers
                 
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                cards = soup.select('div.card, div[class*="prod"], article, li.product, .md-card')
-                if not cards:
-                    cards = soup.find_all(lambda tag: tag.name in ['div', 'article'] and tag.find('h5') and tag.find('a'))
+                items = soup.select('a[href*="/carte/"], .card, .product-item, div[class*="prod"]')
+                print(f"[Cărturești] Elemente găsite: {len(items)}")
 
-                for card in cards:
-                    title_el = card.select_one('h5, h4, h3, .title, a[title]')
-                    author_el = card.select_one('a[href*="/autor/"], .author, .subtitlu-produs')
-                    price_el = card.select_one('.suma, .price, span[content]')
-                    link_el = card.select_one('a[href*="/carte/"], a.select-item-event, a')
-
-                    title = title_el.get_text(strip=True) if title_el else None
-                    if not title or len(title) < 2:
-                        continue
-
-                    author = author_el.get_text(strip=True) if author_el else None
+                for item in items:
+                    title = item.get('title') or item.get_text(strip=True)
+                    url_prod = item.get('href') if item.name == 'a' else (item.select_one('a')['href'] if item.select_one('a') else None)
                     
-                    price = None
-                    if price_el:
-                        try:
-                            raw = price_el.get('content') or price_el.get_text(strip=True)
-                            raw_clean = ''.join(c for c in raw if c.isdigit() or c == '.')
-                            price = float(raw_clean) if raw_clean else None
-                        except:
-                            pass
-
-                    url_prod = link_el.get('href') if link_el else None
-                    if url_prod and not url_prod.startswith('http'):
-                        url_prod = f"https://carturesti.ro{url_prod}"
-
-                    if not self._is_relevant(title, author, query):
+                    if not url_prod or "/carte/" not in url_prod:
                         continue
+                        
+                    if title and len(title) > 3:
+                        if not self._is_relevant(title, None, query):
+                            continue
 
-                    offers.append(BookOffer(
-                        store=self.name,
-                        title=title,
-                        author=author,
-                        price=price,
-                        currency="RON",
-                        available=True,
-                        url=url_prod,
-                    ))
+                        if url_prod and not url_prod.startswith('http'):
+                            url_prod = f"https://carturesti.ro{url_prod}"
+
+                        offers.append(BookOffer(
+                            store=self.name,
+                            title=title,
+                            author=None,
+                            price=None,
+                            currency="RON",
+                            available=True,
+                            url=url_prod,
+                        ))
         except Exception as e:
             print(f"[Cărturești Error]: {e}")
 
@@ -75,5 +63,4 @@ class CarturestiScraper(BookStoreScraper):
                 seen.add(o.url)
                 unique_offers.append(o)
 
-        unique_offers.sort(key=lambda o: (o.price is None, o.price))
-        return unique_offers
+        return unique_offers[:10]
