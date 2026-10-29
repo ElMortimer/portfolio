@@ -7,7 +7,15 @@ from app.search import search_all_stores
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     playwright = await async_playwright().start()
-    browser = await playwright.chromium.launch(headless=True)
+    browser = await playwright.chromium.launch(
+        headless=True,
+        args=[
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu"
+        ]
+    )
     app.state.browser = browser
     
     yield
