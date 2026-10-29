@@ -9,7 +9,9 @@ async def lifespan(app: FastAPI):
     playwright = await async_playwright().start()
     browser = await playwright.chromium.launch(headless=True)
     app.state.browser = browser
+    
     yield
+    
     await browser.close()
     await playwright.stop()
 
@@ -32,7 +34,15 @@ async def search_books(request: Request, q: str = Query(..., min_length=2)):
     try:
         browser = request.app.state.browser
         results = await search_all_stores(q, browser)
-        return {"query": q, "count": len(results), "results": results}
+        return {
+            "query": q,
+            "count": len(results),
+            "results": results
+        }
     except Exception as e:
         print(f"[EROARE CRITICĂ LA CĂUTARE]: {e}")
-        return {"query": q, "count": 0, "results": []}
+        return {
+            "query": q,
+            "count": 0,
+            "results": []
+        }
