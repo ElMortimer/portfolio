@@ -35,7 +35,7 @@ EXTRACT_JS = """
 class CarturestiScraper(BookStoreScraper):
     name = "carturesti"
 
-async def search(self, query: str, browser: Browser) -> list[BookOffer]:
+    async def search(self, query: str, browser: Browser) -> list[BookOffer]:
         offers: list[BookOffer] = []
         
         page = await browser.new_page(
@@ -46,12 +46,12 @@ async def search(self, query: str, browser: Browser) -> list[BookOffer]:
             url = f"https://carturesti.ro/product/search/{quote(query)}"
             await page.goto(url, wait_until="domcontentloaded")
             
-            print(f"[Cărturești] Titlu pagină văzut de bot: {await page.title()}")
+            print(f"[Cărturești] Titlu pagină: {await page.title()}")
 
             try:
                 await page.wait_for_selector("h5.md-title", timeout=30000)
             except Exception as e:
-                print(f"[Cărturești] Nu am găsit cărțile la timp: {e}")
+                print(f"[Cărturești] Timeout sau nu s-au găsit cărți: {e}")
                 return offers
                 
             raw_items = await page.evaluate(EXTRACT_JS)
