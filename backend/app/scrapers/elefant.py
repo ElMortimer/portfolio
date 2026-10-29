@@ -12,7 +12,8 @@ class ElefantScraper(BookStoreScraper):
         url = f"https://www.elefant.ro/search?SearchTerm={quote(query)}"
         
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7"
         }
 
         try:
@@ -22,12 +23,12 @@ class ElefantScraper(BookStoreScraper):
                     return offers
                 
                 soup = BeautifulSoup(response.text, 'html.parser')
-                cards = soup.select('div.product-tile')
+                cards = soup.select('div.product-tile, div.product-card, div[class*="product"]')
 
                 for card in cards:
-                    title_el = card.select_one('a.product-title')
-                    author_el = card.select_one('a.product-manufacturer')
-                    price_el = card.select_one('.current-price')
+                    title_el = card.select_one('a.product-title, a[title], h2 a, h3 a')
+                    author_el = card.select_one('a.product-manufacturer, .author')
+                    price_el = card.select_one('.current-price, .price')
 
                     title = title_el.get_text(strip=True) if title_el else None
                     if not title or "audiobook" in title.lower():
@@ -60,5 +61,12 @@ class ElefantScraper(BookStoreScraper):
         except Exception as e:
             print(f"[Elefant Error]: {e}")
 
-        offers.sort(key=lambda o: (o.price is None, o.price))
-        return offers
+        seen = set()
+        unique_offers = []
+        for o in offers:
+            if o.url not in seen:
+                seen.add(o.url)
+                unique_offers.append(o)
+
+        unique_offers.sort(key=lambda o: (o.price is None, o.price))
+        return unique_offers
