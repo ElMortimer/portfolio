@@ -20,7 +20,7 @@ export default function Home() {
 
     try {
       // Modificat pentru Next.js
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://book-finder-api.onrender.com";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://www.cana-alexandru-valentin.me/";
       const response = await fetch(`${API_URL}/api/search?q=${encodeURIComponent(query)}`);
       
       if (!response.ok) throw new Error("Eroare la conectarea cu serverul");
